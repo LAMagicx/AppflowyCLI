@@ -80,6 +80,7 @@ def test_coerce_database_cells_maps_single_select_names_to_ids(monkeypatch):
         return [
             {
                 "name": "Priority",
+                "id": "priority-field-id",
                 "field_type": "SingleSelect",
                 "type_option": {
                     "content": {
@@ -90,14 +91,27 @@ def test_coerce_database_cells_maps_single_select_names_to_ids(monkeypatch):
                     }
                 },
             },
-            {"name": "Name", "field_type": "RichText", "type_option": {}},
+            {"name": "Name", "id": "name-field-id", "field_type": "RichText", "type_option": {}},
         ]
 
     monkeypatch.setattr(cli.af, "get_database_fields", fake_get_database_fields)
 
     assert cli._coerce_database_cells("token", "ws", "db", {"Name": "Task", "Priority": "High"}) == {
-        "Name": "Task",
-        "Priority": "high-id",
+        "name-field-id": "Task",
+        "priority-field-id": "high-id",
+    }
+
+
+def test_coerce_database_cells_accepts_field_ids(monkeypatch):
+    def fake_get_database_fields(token, workspace_id, database_id):
+        return [
+            {"name": "Name", "id": "name-field-id", "field_type": "RichText", "type_option": {}},
+        ]
+
+    monkeypatch.setattr(cli.af, "get_database_fields", fake_get_database_fields)
+
+    assert cli._coerce_database_cells("token", "ws", "db", {"name-field-id": "Task"}) == {
+        "name-field-id": "Task",
     }
 
 
@@ -106,6 +120,7 @@ def test_coerce_database_cells_accepts_single_select_ids(monkeypatch):
         return [
             {
                 "name": "Priority",
+                "id": "priority-field-id",
                 "field_type": "SingleSelect",
                 "type_option": {"content": {"options": [{"id": "high-id", "name": "High"}]}},
             },
@@ -113,7 +128,9 @@ def test_coerce_database_cells_accepts_single_select_ids(monkeypatch):
 
     monkeypatch.setattr(cli.af, "get_database_fields", fake_get_database_fields)
 
-    assert cli._coerce_database_cells("token", "ws", "db", {"Priority": "high-id"}) == {"Priority": "high-id"}
+    assert cli._coerce_database_cells("token", "ws", "db", {"Priority": "high-id"}) == {
+        "priority-field-id": "high-id",
+    }
 
 
 def test_coerce_database_cells_rejects_unknown_single_select_names(monkeypatch):
@@ -121,6 +138,7 @@ def test_coerce_database_cells_rejects_unknown_single_select_names(monkeypatch):
         return [
             {
                 "name": "Priority",
+                "id": "priority-field-id",
                 "field_type": "SingleSelect",
                 "type_option": {"content": {"options": [{"id": "high-id", "name": "High"}]}},
             },

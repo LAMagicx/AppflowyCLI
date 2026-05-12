@@ -2,6 +2,7 @@ import os
 import json
 import struct
 import uuid
+import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import requests
@@ -328,7 +329,7 @@ def _encode_collab(doc):
     return encoded
 
 
-def _put_collab(token, workspace_id, view_id, encoded):
+def _put_collab(token, workspace_id, view_id, encoded, collab_type=0):
     resp = _request(
         "PUT",
         f"/api/workspace/{workspace_id}/collab/{view_id}",
@@ -336,7 +337,7 @@ def _put_collab(token, workspace_id, view_id, encoded):
         json={
             "workspace_id": workspace_id,
             "object_id": view_id,
-            "collab_type": 0,
+            "collab_type": collab_type,
             "encoded_collab_v1": list(encoded),
         },
     )
@@ -474,3 +475,30 @@ def upsert_database_row(token, workspace_id, database_id, row_id, cells, pre_has
     )
     data = _response_json(resp, "upsert database row")
     return _check_api_result(data, "Upsert database row")
+
+
+def update_database_row_cells(token, workspace_id, row_id, cells, field_types):
+    data = get_page_collab(token, workspace_id, row_id)
+    doc = pycrdt.Doc()
+    doc.apply_update(bytes(data["doc_state"]))
+    root = doc.get("data", type=pycrdt.Map)
+    row_data = root["data"]
+    row_cells = row_data["cells"]
+    now = int(time.time())
+
+    for field_id, value in cells.items():
+        field_type = field_types.get(field_id)
+        if field_type is None:
+            raise AppFlowyError(f"Unknown field ID for row update: {field_id}")
+        existing = row_cells.get(field_id)
+        created_at = now
+        if isinstance(existing, pycrdt.Map) and "created_at" in existing:
+            created_at = existing["created_at"]
+        row_cells[field_id] = {
+            "data": value,
+            "field_type": field_type,
+            "created_at": created_at,
+            "last_modified": now,
+        }
+    row_data["last_modified"] = now
+    return _put_collab(token, workspace_id, row_id, _encode_collab(doc), collab_type=1)
