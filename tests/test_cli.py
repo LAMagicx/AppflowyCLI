@@ -18,6 +18,29 @@ def test_parse_cells_allows_equals_in_value():
     assert cli._parse_cells(["Formula=a=b"]) == {"Formula": "a=b"}
 
 
+def test_task_document_from_summary_and_description_args():
+    class Args:
+        document = None
+        summary_text = "Agent-facing task details"
+        description_text = "Longer human notes"
+
+    assert cli._task_document_from_args(Args) == (
+        "#### Summary\n\n"
+        "Agent-facing task details\n\n"
+        "# Description\n\n"
+        "Longer human notes"
+    )
+
+
+def test_task_document_prefers_explicit_document():
+    class Args:
+        document = "Custom body"
+        summary_text = "Ignored"
+        description_text = "Ignored"
+
+    assert cli._task_document_from_args(Args) == "Custom body"
+
+
 def test_task_profile_round_trips(tmp_path, monkeypatch):
     config = tmp_path / "appflowy.toml"
     monkeypatch.setattr(cli, "CONFIG_FILE", str(config))

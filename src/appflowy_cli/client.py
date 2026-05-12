@@ -455,12 +455,15 @@ def get_database_row_details(token, workspace_id, database_id, row_ids=None, wit
     return _unwrap_data(_check_api_result(data, "Get database row details"))
 
 
-def create_database_row(token, workspace_id, database_id, cells):
+def create_database_row(token, workspace_id, database_id, cells, document=None):
+    payload = {"cells": cells}
+    if document is not None:
+        payload["document"] = document
     resp = _request(
         "POST",
         f"/api/workspace/{workspace_id}/database/{database_id}/row",
         token=token,
-        json={"cells": cells},
+        json=payload,
     )
     data = _response_json(resp, "create database row")
     return _check_api_result(data, "Create database row")

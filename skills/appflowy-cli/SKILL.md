@@ -55,6 +55,7 @@ Use semantic task commands after the profile is configured:
 ./appflowy task list --status "Todo" --status "In Progress" --summary --json
 ./appflowy task list --exclude-status "Done" --exclude-status "Archived" --summary --json
 ./appflowy task create "Send invoice" --status "Todo" --priority "High"
+./appflowy task create "Send invoice" --status "Todo" --summary-text "Agent-facing task context"
 ./appflowy task move "Send invoice" "In review"
 ./appflowy task note "Send invoice" "Checked contract and invoice draft."
 ```
@@ -75,6 +76,10 @@ H4 `Summary` section from each task body and stops at the next heading. Use
 `--summary-stop-heading` or repeated `--body-heading` when flattened AppFlowy
 row text needs explicit section boundaries. Tasks without the requested leading
 summary section omit the `summary` field.
+
+Use `task create --summary-text` to initialize that Summary section for
+agent-facing task details. Add `--description-text` for a following Description
+section, or `--document` to provide the full row body yourself.
 
 ## Pages And Raw Rows
 

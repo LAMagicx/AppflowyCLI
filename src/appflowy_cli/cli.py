@@ -597,12 +597,26 @@ def _parse_cell_value(value):
         return value
 
 
+def _task_document_from_args(args):
+    if args.document is not None:
+        return args.document
+    if args.summary_text is None and args.description_text is None:
+        return None
+    lines = ["#### Summary"]
+    if args.summary_text:
+        lines.extend(["", args.summary_text])
+    lines.extend(["", "# Description"])
+    if args.description_text:
+        lines.extend(["", args.description_text])
+    return "\n".join(lines).strip()
+
+
 def cmd_row_create(args):
     token = af.require_token()
     ws = get_ws()
     cells = _parse_cells(args.cell)
     cells = _coerce_database_cells(token, ws, args.database_id, cells)
-    result = af.create_database_row(token, ws, args.database_id, cells)
+    result = af.create_database_row(token, ws, args.database_id, cells, document=args.document)
     if args.json:
         print_json(result)
     else:
@@ -696,7 +710,7 @@ def cmd_task_create(args):
     title_field = _task_field(profile, "title", required=True)
     cells[title_field] = args.title
     cells = _coerce_database_cells(token, ws, profile["database"], cells)
-    result = af.create_database_row(token, ws, profile["database"], cells)
+    result = af.create_database_row(token, ws, profile["database"], cells, document=_task_document_from_args(args))
     if args.json:
         print_json(result)
     else:
@@ -804,6 +818,7 @@ def main():
     rc_p.add_argument("database_id", help="Database ID")
     rc_p.add_argument("--cell", action="append", required=True, metavar="KEY=VALUE",
                       help="Cell value (repeatable)")
+    rc_p.add_argument("--document", help="Initial row body document text")
     rc_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     ru_p = sub.add_parser("row-update", help="Update a database row")
@@ -841,6 +856,9 @@ def main():
     task_create_p.add_argument("--notes", help="Initial notes")
     task_create_p.add_argument("--due", help="Due date")
     task_create_p.add_argument("--priority", help="Priority")
+    task_create_p.add_argument("--summary-text", help="Initial text for a leading H4 Summary section")
+    task_create_p.add_argument("--description-text", help="Initial text for a following H1 Description section")
+    task_create_p.add_argument("--document", help="Initial task body document text")
     task_create_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     task_move_p = task_sub.add_parser("move", help="Move a task to a new status")
