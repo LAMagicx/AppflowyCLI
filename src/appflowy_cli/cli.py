@@ -20,6 +20,7 @@ Usage:
     appflowy task move <task> <status>
     appflowy task note <task> <note>
 """
+import argcomplete
 import argparse
 import sys
 import json
@@ -802,6 +803,68 @@ def cmd_task_note(args):
         print(f"Note added to task {row_id[:8]}...")
 
 
+# ── Shell completion ─────────────────────────────────────────────────
+
+def _safe_completer(fn):
+    def wrapper(**kwargs):
+        try:
+            return fn(**kwargs)
+        except (Exception, SystemExit):
+            return []
+    return wrapper
+
+
+@_safe_completer
+def _complete_database_ids(**kwargs):
+    token = af.require_token()
+    ws = get_ws()
+    return {
+        db["id"]: ", ".join(v["name"] for v in db.get("views", []))
+        for db in af.get_databases(token, ws)
+    }
+
+
+@_safe_completer
+def _complete_row_ids(parsed_args, **kwargs):
+    token = af.require_token()
+    ws = get_ws()
+    database_id = getattr(parsed_args, "database_id", None)
+    if not database_id:
+        return []
+    fields = af.get_database_fields(token, ws, database_id)
+    primary_field = next((f["name"] for f in fields if f.get("is_primary")), None)
+    rows = af.get_database_row_details(token, ws, database_id)
+    return {
+        row["id"]: _cell_text(row, primary_field) if primary_field else ""
+        for row in rows
+    }
+
+
+@_safe_completer
+def _complete_page_names(**kwargs):
+    token = af.require_token()
+    ws = get_ws()
+    pages = af.collect_pages(token, ws)
+    return {p["name"]: p["view_id"][:8] + "..." for p in pages if not p.get("is_space")}
+
+
+@_safe_completer
+def _complete_space_names(**kwargs):
+    token = af.require_token()
+    ws = get_ws()
+    return [s["name"] for s in af.get_spaces(token, ws)]
+
+
+@_safe_completer
+def _complete_task_titles(**kwargs):
+    token = af.require_token()
+    ws = get_ws()
+    profile = _task_profile()
+    title_field = _task_field(profile, "title", required=True)
+    rows = af.get_database_rows(token, ws, profile["database"])
+    return [title for row in rows if (title := _cell_text(row, title_field))]
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main():
@@ -824,16 +887,16 @@ def main():
     spaces_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     pages_p = sub.add_parser("pages", help="List pages")
-    pages_p.add_argument("--space", help="Filter by space name")
+    pages_p.add_argument("--space", help="Filter by space name").completer = _complete_space_names
     pages_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     read_p = sub.add_parser("read", help="Read page content")
-    read_p.add_argument("name", help="Page name or view ID")
+    read_p.add_argument("name", help="Page name or view ID").completer = _complete_page_names
     read_p.add_argument("--json", action="store_true", help="Output block structure as JSON")
     read_p.add_argument("--fuzzy", action="store_true", help="Allow unique substring page-name matches")
 
     append_p = sub.add_parser("append", help="Append text to a page")
-    append_p.add_argument("name", help="Page name or view ID")
+    append_p.add_argument("name", help="Page name or view ID").completer = _complete_page_names
     append_p.add_argument("text", help="Text to append")
     append_p.add_argument("--fuzzy", action="store_true", help="Allow unique substring page-name matches")
     append_p.add_argument("--type", choices=["paragraph", "heading", "bulleted_list", "todo_list", "quote"],
@@ -843,11 +906,11 @@ def main():
     databases_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     fields_p = sub.add_parser("fields", help="Show database fields")
-    fields_p.add_argument("database_id", help="Database ID")
+    fields_p.add_argument("database_id", help="Database ID").completer = _complete_database_ids
     fields_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     rows_p = sub.add_parser("rows", help="Show database rows")
-    rows_p.add_argument("database_id", help="Database ID")
+    rows_p.add_argument("database_id", help="Database ID").completer = _complete_database_ids
     rows_p.add_argument("--updated", action="store_true", help="Only show recently updated rows")
     rows_p.add_argument("--status-field", help="Field containing the row status")
     rows_p.add_argument("--status", action="append", help="Only include this status (repeatable)")
@@ -859,15 +922,15 @@ def main():
     rows_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     rc_p = sub.add_parser("row-create", help="Create a database row")
-    rc_p.add_argument("database_id", help="Database ID")
+    rc_p.add_argument("database_id", help="Database ID").completer = _complete_database_ids
     rc_p.add_argument("--cell", action="append", required=True, metavar="KEY=VALUE",
                       help="Cell value (repeatable)")
     rc_p.add_argument("--document", help="Initial row body document text")
     rc_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     ru_p = sub.add_parser("row-update", help="Update a database row")
-    ru_p.add_argument("database_id", help="Database ID")
-    ru_p.add_argument("row_id", help="Row ID")
+    ru_p.add_argument("database_id", help="Database ID").completer = _complete_database_ids
+    ru_p.add_argument("row_id", help="Row ID").completer = _complete_row_ids
     ru_p.add_argument("--cell", action="append", required=True, metavar="KEY=VALUE",
                       help="Cell value (repeatable)")
     ru_p.add_argument("--pre-hash", default="", help="Existing row pre_hash for conflict detection")
@@ -908,17 +971,18 @@ def main():
     task_create_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     task_move_p = task_sub.add_parser("move", help="Move a task to a new status")
-    task_move_p.add_argument("task", help="Task title or row ID")
+    task_move_p.add_argument("task", help="Task title or row ID").completer = _complete_task_titles
     task_move_p.add_argument("status", help="New status")
     task_move_p.add_argument("--fuzzy", action="store_true", help="Allow unique substring title matches")
     task_move_p.add_argument("--json", action="store_true", help="Output as JSON")
 
     task_note_p = task_sub.add_parser("note", help="Append a note to a task notes field")
-    task_note_p.add_argument("task", help="Task title or row ID")
+    task_note_p.add_argument("task", help="Task title or row ID").completer = _complete_task_titles
     task_note_p.add_argument("note", help="Note text")
     task_note_p.add_argument("--fuzzy", action="store_true", help="Allow unique substring title matches")
     task_note_p.add_argument("--json", action="store_true", help="Output as JSON")
 
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     commands = {
